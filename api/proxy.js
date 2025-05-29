@@ -1,38 +1,34 @@
-const express = require("express");
-const cors = require("cors");
-const fetch = require("node-fetch");
+export default async function handler(req, res) {
+  const { url } = req.query;
+  if (!url) {
+    res.status(400).send("Missing 'url' parameter.");
+    return;
+  }
 
-const app = express();
-app.use(cors());
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(url);
+  } catch (e) {
+    res.status(400).send("Invalid URL provided.");
+    return;
+  }
+  if (!parsedUrl.pathname.endsWith(".txt")) {
+    res.status(400).send("Only .txt files are allowed.");
+    return;
+  }
 
-app.get("/api/proxy", async (req, res) => {
-    const rawUrl = req.query.url;
-    
-    if (!rawUrl) {
-        return res.status(400).json({ error: "No URL provided" });
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      res.status(response.status).send("Error fetching remote URL.");
+      return;
     }
+    const text = await response.text();
 
-    try {
-        console.log("Fetching:", rawUrl); // Debugging output
-
-        const response = await fetch(decodeURIComponent(rawUrl), {
-            headers: {
-                "User-Agent": "Mozilla/5.0", // Mimic a browser request
-                "Accept": "*/*"
-            }
-        });
-
-        if (!response.ok) {
-            throw new Error(`Failed to fetch content: ${response.status} ${response.statusText}`);
-        }
-
-        const data = await response.text();
-        res.set("Access-Control-Allow-Origin", "*"); // Allow CORS
-        res.send(data);
-    } catch (error) {
-        console.error("Error:", error); // Log errors for debugging
-        res.status(500).json({ error: error.message });
-    }
-});
-
-app.listen(3000, () => console.log("Proxy running on port 3000"));
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.status(200).send(text);
+  } catch (error) {
+    res.status(500).send("Server error: " + error.message);
+  }
+}
